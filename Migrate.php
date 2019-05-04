@@ -62,7 +62,10 @@ class Migrate {
       }
       $createQuery = $createQuery . implode(', ', $fields) . ');';
       $migrationQueries[] = $createQuery;
-      file_put_contents('migration/1.sql', implode("\r\n", $migrationQueries));
+      // Create the migration directory if not exist
+      if (!file_exists(self::DEFAULT_MIGRATION_DIRECTORY))
+        mkdir(self::DEFAULT_MIGRATION_DIRECTORY, 0777, true);
+      file_put_contents(self::DEFAULT_MIGRATION_DIRECTORY . '1.sql', implode("\r\n", $migrationQueries));
     }
   }
 
@@ -88,7 +91,8 @@ class Migrate {
     // Queries exectuion
     foreach ($allQueries as $query) {
       $result = $this->pdo->exec($query);
-      if($result == false)
+      var_dump($result);
+      if($result !== 0 && $result == false)
         throw new \Exception("Query execution return an error : " . $query . "\n");
     }
 
