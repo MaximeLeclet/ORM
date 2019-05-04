@@ -1,5 +1,5 @@
 {
-  "tableName" : "posts",
+  "tableName" : "post",
   "version" : "1",
   "fields" : {
     "id" : {

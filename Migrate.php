@@ -49,12 +49,25 @@ class Migrate {
 
   // Make migration files
   public function makeMigration() {
+    // Create the version control table it it not exists
+    self::createSchemaVersionTable();
+
+    // Migration queries
     $migrationQueries = array();
+
     foreach ($this->files as $file) {
+
       // Getting file's content
       $clearContent = Migrate::getConfigFileContent($file);
       $tableName = (array_key_exists('tableName', $clearContent)) ? $clearContent['tableName'] : pathinfo(self::DEFAULT_CONFIG_DIRECTORY . $file)['filename'];
-      $createQuery = 'CREATE TABLE ' . $tableName . ' (';
+
+      // Version of the file
+      $schemaVersion = $clearContent['version'];
+      // Version of the table
+      $DBVersion = $this->pdo->query('SELECT version FROM schema_version WHERE table_name LIKE "' . $tableName . '";')->fetch(PDO::FETCH_ASSOC);
+
+      // Creation of the table if it no exists
+      $createQuery = 'CREATE TABLE IF NOT EXISTS ' . $tableName . ' (';
       $fields = array();
       foreach ($clearContent['fields'] as $key => $value) {
         $properties = (array_key_exists('properties', $value)) ? ' ' . $value['properties'] : '';
@@ -62,6 +75,17 @@ class Migrate {
       }
       $createQuery = $createQuery . implode(', ', $fields) . ');';
       $migrationQueries[] = $createQuery;
+
+      // If there is no version in base
+      if(!$DBVersion) {
+        // TODO ...
+      }
+
+      // If the local version if different of the DB version, UPDATE !
+      if($schemaVersion != $DBVersion) {
+        // TODO ...
+      }
+
       // Create the migration directory if not exist
       if (!file_exists(self::DEFAULT_MIGRATION_DIRECTORY))
         mkdir(self::DEFAULT_MIGRATION_DIRECTORY, 0777, true);
@@ -91,7 +115,6 @@ class Migrate {
     // Queries exectuion
     foreach ($allQueries as $query) {
       $result = $this->pdo->exec($query);
-      var_dump($result);
       if($result !== 0 && $result == false)
         throw new \Exception("Query execution return an error : " . $query . "\n");
     }
@@ -102,6 +125,18 @@ class Migrate {
   public static function getConfigFileContent($file) {
     $JSONContent = file_get_contents(self::DEFAULT_CONFIG_DIRECTORY . $file);
     return json_decode($JSONContent, true);
+  }
+
+  // Create the version control table it it not exists
+  public function createSchemaVersionTable() {
+    $query = 'CREATE TABLE IF NOT EXISTS schema_version(table_name VARCHAR(255) NOT NULL PRIMARY KEY, version INTEGER NOT NULL, columns VARCHAR(255));';
+    $this->pdo->exec($query);
+  }
+
+  public function initDBVersion($tableName, $fields) {
+    $DBVersion = 1;
+    $versionQuery = 'INSERT INTO schema_version VALUES(' . $tableName . ', ' . $DBVersion . ', "' . implode(',', $fields) . '")';
+    $this->pdo->exec($versionQuery);
   }
 
 }
