@@ -10,8 +10,6 @@ Just run Migrate.php :)
 
 ---
 
-### Config files
+#### Config files
 
-Required fields :
-..* version
-..* fields (type is required)
+Required fields : 'version' and 'fields' (type is required)
