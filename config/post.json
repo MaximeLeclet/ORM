@@ -1,0 +1,18 @@
+{
+  "tableName" : "posts",
+  "version" : "1",
+  "fields" : {
+    "id" : {
+      "type" : "int",
+      "properties" : "AUTO_INCREMENT NOT NULL PRIMARY KEY"
+    },
+    "content" : {
+      "type" : "varchar(255)",
+      "properties" : ""
+    },
+    "subContent" : {
+      "type" : "varchar(255)",
+      "properties" : ""
+    }
+  }
+}
