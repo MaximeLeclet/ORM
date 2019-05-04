@@ -49,11 +49,15 @@ class Migrate {
 
   // Make migration files
   public function makeMigration() {
-    // Create the version control table it it not exists
-    self::createSchemaVersionTable();
 
     // Migration queries
     $migrationQueries = array();
+
+    // Create the version control table it it not exists
+    if(!$this->pdo->query('SELECT 1 FROM schema_version LIMIT 1')) {
+      $versionControlQuery = 'CREATE TABLE schema_version(table_name VARCHAR(255) NOT NULL PRIMARY KEY, version INTEGER NOT NULL, columns VARCHAR(255));';
+      $migrationQueries[] = $versionControlQuery;
+    }
 
     foreach ($this->files as $file) {
 
@@ -61,34 +65,42 @@ class Migrate {
       $clearContent = Migrate::getConfigFileContent($file);
       $tableName = (array_key_exists('tableName', $clearContent)) ? $clearContent['tableName'] : pathinfo(self::DEFAULT_CONFIG_DIRECTORY . $file)['filename'];
 
-      // Version of the file
-      $schemaVersion = $clearContent['version'];
-      // Version of the table
-      $DBVersion = $this->pdo->query('SELECT version FROM schema_version WHERE table_name LIKE "' . $tableName . '";')->fetch(PDO::FETCH_ASSOC);
-
-      // Creation of the table if it no exists
-      $createQuery = 'CREATE TABLE IF NOT EXISTS ' . $tableName . ' (';
       $fields = array();
       foreach ($clearContent['fields'] as $key => $value) {
         $properties = (array_key_exists('properties', $value)) ? ' ' . $value['properties'] : '';
         $fields[] = $key . ' ' . $value['type'] . $properties;
       }
-      $createQuery = $createQuery . implode(', ', $fields) . ');';
-      $migrationQueries[] = $createQuery;
 
-      // If there is no version in base
-      if(!$DBVersion) {
-        // TODO ...
+      // Creation of the table if it no exists
+      if(!$this->pdo->query('SELECT 1 FROM ' . $tableName . ' LIMIT 1')) {
+        $createQuery = 'CREATE TABLE ' . $tableName . ' (';
+        $createQuery = $createQuery . implode(', ', $fields) . ');';
+        $migrationQueries[] = $createQuery;
       }
 
-      // If the local version if different of the DB version, UPDATE !
-      if($schemaVersion != $DBVersion) {
-        // TODO ...
+      // Version of the file
+      $fileVersion = $clearContent['version'];
+      // Version of the table
+      $DBVersionQuery = $this->pdo->query('SELECT version FROM schema_version WHERE table_name LIKE "' . $tableName . '";');
+
+      // If there is no version in base
+      if(!$DBVersionQuery) {
+        // Set the DB version to the file version
+        $versionQuery = 'INSERT INTO schema_version VALUES("' . $tableName . '", ' . $fileVersion . ', "' . implode(',', $fields) . '");';
+        $migrationQueries[] = $versionQuery;
+      } else {
+        $DBVersion = $DBVersionQuery->fetch(PDO::FETCH_ASSOC)['version'];
+        // If the local version if different of the DB version, UPDATE !
+        if($fileVersion != $DBVersion) { // If the DB had a version
+          echo "UPDATE !";
+          // TODO ...
+        }
       }
 
       // Create the migration directory if not exist
       if (!file_exists(self::DEFAULT_MIGRATION_DIRECTORY))
         mkdir(self::DEFAULT_MIGRATION_DIRECTORY, 0777, true);
+
       file_put_contents(self::DEFAULT_MIGRATION_DIRECTORY . '1.sql', implode("\r\n", $migrationQueries));
     }
   }
@@ -101,42 +113,50 @@ class Migrate {
       $content = file_get_contents(self::DEFAULT_MIGRATION_DIRECTORY . $file);
       $queries = explode("\r\n", $content);
       foreach ($queries as $query) {
-        $allQueries[] = $query;
+        if($query != '')
+          $allQueries[] = $query;
       }
     }
 
-    // Print of the execution plan
-    echo "\nThe following queries will be executed : \n\n";
-    foreach ($allQueries as $query) {
-      echo $query . "\n";
-    }
-    echo "\n";
+    // If there is no queries, print it, else execute
+    if(empty($allQueries)) {
+      echo "\nOK ! Nothing to update !\n\n";
+    } else {
+      // Print of the execution plan
+      echo "\nThe following SQL statements will be executed : \n\n";
+      foreach ($allQueries as $query) {
+        echo $query . "\n";
+      }
+      echo "\n";
 
-    // Queries exectuion
-    foreach ($allQueries as $query) {
-      $result = $this->pdo->exec($query);
-      if($result !== 0 && $result == false)
-        throw new \Exception("Query execution return an error : " . $query . "\n");
-    }
+      echo "Continue ? [O/n] ";
+      $handle = fopen ("php://stdin","r");
+      $line = fgets($handle);
+      if(trim($line) != 'O') {
+          echo "\nAborting...\n\n";
+          exit;
+      }
+      fclose($handle);
 
+      // Queries exectuion
+      foreach ($allQueries as $query) {
+        if($query) {
+          $result = $this->pdo->exec($query);
+          if($result !== 0 && $result == false)
+            throw new \Exception("Query execution return an error : " . $query . "\n");
+        }
+      }
+
+      echo "\n";
+      echo "Done !\n\n";
+
+    }
   }
 
   // Return the JSON decoded of a config file
   public static function getConfigFileContent($file) {
     $JSONContent = file_get_contents(self::DEFAULT_CONFIG_DIRECTORY . $file);
     return json_decode($JSONContent, true);
-  }
-
-  // Create the version control table it it not exists
-  public function createSchemaVersionTable() {
-    $query = 'CREATE TABLE IF NOT EXISTS schema_version(table_name VARCHAR(255) NOT NULL PRIMARY KEY, version INTEGER NOT NULL, columns VARCHAR(255));';
-    $this->pdo->exec($query);
-  }
-
-  public function initDBVersion($tableName, $fields) {
-    $DBVersion = 1;
-    $versionQuery = 'INSERT INTO schema_version VALUES(' . $tableName . ', ' . $DBVersion . ', "' . implode(',', $fields) . '")';
-    $this->pdo->exec($versionQuery);
   }
 
 }
