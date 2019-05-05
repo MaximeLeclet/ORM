@@ -81,26 +81,57 @@ class Migrate {
       // Version of the file
       $fileVersion = $clearContent['version'];
       // Version of the table
-      $DBVersionQuery = $this->pdo->query('SELECT version FROM schema_version WHERE table_name LIKE "' . $tableName . '";');
+      $DBData = $this->pdo->query('SELECT version, columns FROM schema_version WHERE table_name LIKE "' . $tableName . '";');
 
       // If there is no version in base
-      if(!$DBVersionQuery) {
+      if(!$DBData) {
         // Set the DB version to the file version
         $versionQuery = 'INSERT INTO schema_version VALUES("' . $tableName . '", ' . $fileVersion . ', "' . implode(',', $fields) . '");';
         $migrationQueries[] = $versionQuery;
-      } else {
-        $DBVersion = $DBVersionQuery->fetch(PDO::FETCH_ASSOC)['version'];
-        // If the local version if different of the DB version, UPDATE !
-        if($fileVersion != $DBVersion) { // If the DB had a version
-          echo "UPDATE !";
-          // TODO ...
+      } else { // If the DB had a version
+
+        $DBData = $DBData->fetch(PDO::FETCH_ASSOC);
+        $DBVersion = $DBData['version'];
+
+        if($fileVersion != $DBVersion) { // If the current version is different of the DB version, update !
+          $DBFields = explode(',', $DBData['columns']);
+          $DBFieldsNames = array();
+          // Getting DB fields names
+          foreach ($DBFields as $DBField) {
+            $DBFieldsExploded = explode(" ", $DBField);
+            $DBFieldsNames[] = $DBFieldsExploded[0];
+          }
+
+          $fileFieldsNames = array();
+          // Getting file fields names
+          foreach ($clearContent['fields'] as $key => $value) {
+            $fileFieldsNames[] = $key;
+          }
+
+          $newFields = array_diff($fileFieldsNames, $DBFieldsNames);
+          $deletedFields = array_diff($DBFieldsNames, $fileFieldsNames);
+
+          // Creating queries to update new fields
+          foreach ($newFields as $key => $value) {
+            $typeNewField = $clearContent['fields'][$value]['type'];
+            $propertiesNewField = (array_key_exists('properties', $clearContent['fields'][$value])) ? $clearContent['fields'][$value]['properties'] : '';
+            $newFieldsQuery = 'ALTER TABLE ' . $tableName . ' ADD ' . $value . ' ' . $typeNewField . ' ' . $propertiesNewField . ';';
+            $schemaNewFieldsQuery = 'UPDATE schema_version SET columns = "' . implode(',', $fields) . '" WHERE table_name LIKE "' . $tableName . '";';
+            $migrationQueries[] = $newFieldsQuery;
+            $migrationQueries[] = $schemaNewFieldsQuery;
+          }
+          // Creating queries to update deleted fields
+          foreach ($deletedFields as $key => $value) {
+            // code...
+          }
+
         }
       }
 
       // Create the migration directory if not exist
       if (!file_exists(self::DEFAULT_MIGRATION_DIRECTORY))
         mkdir(self::DEFAULT_MIGRATION_DIRECTORY, 0777, true);
-
+      // Creating the migration file
       file_put_contents(self::DEFAULT_MIGRATION_DIRECTORY . '1.sql', implode("\r\n", $migrationQueries));
     }
   }
