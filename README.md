@@ -9,12 +9,12 @@ BDAA - ORM
 
 Just run Migrate.php :)
 
-Create new tables
-Create new fields
+Create new tables and new fields
 
 ---
 
-### Config files
+Config files  
+
 
 Required fields : 'version' and 'fields' (type is required)
 
